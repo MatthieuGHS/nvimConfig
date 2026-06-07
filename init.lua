@@ -135,14 +135,28 @@ require("lazy").setup({
             },
         },
         {
+            "3rd/image.nvim",
+            build = false, -- on utilise magick CLI, pas le luarock
+            opts = {
+                backend = "kitty",
+                processor = "magick_cli",
+                kitty_method = "normal",
+                max_width = 100,
+                max_height = 30,
+            },
+        },
+        {
             "benlubas/molten-nvim",
             build = ":UpdateRemotePlugins",
+            dependencies = { "3rd/image.nvim" },
             init = function()
                 vim.g.molten_output_win_max_height = 20
                 vim.g.molten_auto_open_output = false
                 vim.g.molten_virt_text_output = true
                 vim.g.molten_virt_lines_off_by_1 = true
                 vim.g.molten_wrap_output = true
+                vim.g.molten_image_provider = "image.nvim"
+                vim.g.molten_auto_image_popup = false
             end,
         },
     },
@@ -479,13 +493,46 @@ end, { desc = "Format" })
 map("n", "<leader>vs", ":VenvSelect<CR>", { desc = "Select venv" })
 
 -- Molten (cellules Jupyter-like — utilise `# %%` pour découper)
+-- Trouve la cellule entourant le curseur (entre deux `# %%`) et l'évalue
+local function molten_eval_cell()
+    local cur = vim.fn.line(".")
+    local last = vim.fn.line("$")
+    local start_line = 1
+    for i = cur, 1, -1 do
+        if vim.fn.getline(i):match("^%s*#%s*%%%%") then
+            start_line = i + 1
+            break
+        end
+    end
+    local end_line = last
+    for i = cur + 1, last do
+        if vim.fn.getline(i):match("^%s*#%s*%%%%") then
+            end_line = i - 1
+            break
+        end
+    end
+    local seq = string.format("%dggV%dgg:<C-u>MoltenEvaluateVisual<CR>", start_line, end_line)
+    vim.api.nvim_feedkeys(
+        vim.api.nvim_replace_termcodes(seq, true, false, true),
+        "x", false
+    )
+end
+
 map("n", "<leader>mi", ":MoltenInit<CR>", { desc = "Init kernel" })
 map("n", "<leader>ml", ":MoltenEvaluateLine<CR>", { desc = "Eval line" })
 map("v", "<leader>mr", ":<C-u>MoltenEvaluateVisual<CR>gv", { desc = "Eval visual" })
-map("n", "<leader>mc", ":MoltenReevaluateCell<CR>", { desc = "Re-eval cell" })
-map("n", "<leader>mo", ":noautocmd MoltenEnterOutput<CR>", { desc = "Open output" })
+map("n", "<leader>mc", molten_eval_cell, { desc = "Eval cell (# %%)" })
+map("n", "<leader>mR", ":MoltenReevaluateCell<CR>", { desc = "Re-eval molten cell" })
+map("n", "<leader>mo", function()
+    vim.cmd("MoltenShowOutput")
+    vim.schedule(function() vim.cmd("noautocmd MoltenEnterOutput") end)
+end, { desc = "Show & enter output" })
 map("n", "<leader>mh", ":MoltenHideOutput<CR>", { desc = "Hide output" })
 map("n", "<leader>md", ":MoltenDelete<CR>", { desc = "Delete cell" })
+
+-- Navigation entre cellules `# %%`
+map("n", "]c", function() vim.fn.search("^\\s*#\\s*%%", "W") end, { desc = "Cellule suivante" })
+map("n", "[c", function() vim.fn.search("^\\s*#\\s*%%", "bW") end, { desc = "Cellule précédente" })
 
 -- Indentation visuelle (garde la sélection après >/<)
 map("v", "<", "<gv")
