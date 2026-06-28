@@ -120,7 +120,18 @@ require("lazy").setup({
         { "stevearc/conform.nvim" },
 
         -- Editing helpers
-        { "windwp/nvim-autopairs", event = "InsertEnter", opts = {} },
+        {
+            "windwp/nvim-autopairs",
+            event = "InsertEnter",
+            config = function()
+                local npairs = require("nvim-autopairs")
+                npairs.setup({})
+                npairs.remove_rule("{")
+            end,
+        },
+
+        -- Tmux / Neovim seamless navigation
+        { "christoomey/vim-tmux-navigator", lazy = false },
 
         -- Python data-science
         {
@@ -206,6 +217,7 @@ require("nvim-treesitter.configs").setup({
         "python", "lua", "vim", "vimdoc", "query",
         "markdown", "markdown_inline",
         "json", "yaml", "toml", "bash",
+        "c", "cpp",
     },
     sync_install = false,
     highlight = { enable = true },
@@ -289,7 +301,7 @@ require("lualine").setup({
 -- ---------------------------------------------------------------------------
 require("mason").setup()
 require("mason-lspconfig").setup({
-    ensure_installed = { "lua_ls", "pyright", "ruff" },
+    ensure_installed = { "lua_ls", "pyright", "ruff", "clangd" },
 })
 
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
@@ -322,8 +334,12 @@ vim.lsp.config("lua_ls", {
     },
 })
 
+vim.lsp.config("clangd", {
+    cmd = { "clangd", "--background-index", "--clang-tidy", "--header-insertion=never" },
+})
+
 -- Active les serveurs (mason-lspconfig le fait déjà, mais explicite > implicite)
-vim.lsp.enable({ "pyright", "ruff", "lua_ls" })
+vim.lsp.enable({ "pyright", "ruff", "lua_ls", "clangd" })
 
 -- Désactive le hover de ruff (laisse pyright le gérer, pas de doublon)
 vim.api.nvim_create_autocmd("LspAttach", {
@@ -405,9 +421,16 @@ cmp.event:on("confirm_done", autopairs_cmp.on_confirm_done())
 -- Conform (formatter — format on save)
 -- ---------------------------------------------------------------------------
 require("conform").setup({
+    formatters = {
+        clang_format = {
+            args = { "--style=file:/home/magsen/.config/clang-format/config", "-assume-filename", "$FILENAME" },
+        },
+    },
     formatters_by_ft = {
         python = { "ruff_format", "ruff_organize_imports" },
         lua = { "stylua" },
+        c   = { "clang_format" },
+        cpp = { "clang_format" },
     },
     format_on_save = {
         timeout_ms = 1000,
@@ -473,11 +496,11 @@ map("n", "<leader>th", ":tabprevious<CR>", { desc = "Prev tab" })
 map("n", "<C-x>", ":botright 12split | terminal<CR>", { desc = "Terminal split" })
 map("t", "<Esc>", [[<C-\><C-n>]], { desc = "Term → Normal" })
 
--- Window navigation
-map("n", "<C-h>", "<C-w>h", { desc = "Window left" })
-map("n", "<C-j>", "<C-w>j", { desc = "Window down" })
-map("n", "<C-k>", "<C-w>k", { desc = "Window up" })
-map("n", "<C-l>", "<C-w>l", { desc = "Window right" })
+-- Window / pane navigation (vim-tmux-navigator — fonctionne aussi depuis nvim dans tmux)
+map("n", "<C-h>", "<cmd>TmuxNavigateLeft<CR>",  { desc = "Window left" })
+map("n", "<C-j>", "<cmd>TmuxNavigateDown<CR>",  { desc = "Window down" })
+map("n", "<C-k>", "<cmd>TmuxNavigateUp<CR>",    { desc = "Window up" })
+map("n", "<C-l>", "<cmd>TmuxNavigateRight<CR>", { desc = "Window right" })
 
 -- Save / quit / search
 map("n", "<leader>w", ":w<CR>", { desc = "Save" })
